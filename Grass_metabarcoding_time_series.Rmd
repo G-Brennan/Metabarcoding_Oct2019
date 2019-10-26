@@ -1,0 +1,366 @@
+---
+title: "Grass_metabarcoding_time_series"
+author: "Georgina"
+date: "10/25/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+#setwd
+#setwd("C:/Users/cap34/Dropbox/grass pollen/hiseq_yr1_final/post-blast/both markers/")
+```{r}
+setwd("~/Documents/Liverpool_metabarcoding_year1/nbgw_output/rbcL_blast_summaries/R code/caitlin_figures")
+```
+
+#libraries
+
+```{r}
+library(ggplot2)
+library(reshape2)
+library(tidyr)
+library(RColorBrewer)
+library(cowplot)
+library(grid)
+
+```
+
+#load the files
+```{r}
+#OTU
+
+# read in data:
+# here my Sample ID is column 1 and I am using "row.names = 1" to change the rownmaes into my columns ID
+its2.db <- read.csv("its2-otu-table-NdV.csv",  row.names = 1, check.names =FALSE)
+
+# list of grasses species
+its2.tax <- read.csv("its2-family.csv")
+
+#Metadata
+meta <- read.csv("metadata.csv")
+
+# work out the relative abundance
+its2.prop <- as.data.frame(prop.table(data.matrix(its2.db), margin=1))
+its2.prop$Sample <- row.names(its2.prop)
+its2.prop <- merge(meta, its2.prop, by = 'Sample', all=FALSE)
+its2.prop <- subset(its2.prop, !is.na(its2.prop$Week))
+
+```
+Make data into long format for ecological statistical analysis and plotting in ggplot2
+```{r}
+its2.long <- gather(its2.prop, Taxa, proportion, Agrostis:Secale, factor_key=TRUE)
+its2.long <- merge(its2.long, its2.tax, by='Taxa')
+its2.long.grass <- subset(its2.long, its2.long$Family == 'Poaceae')
+
+#format the dates
+its2.long.grass$Date <- as.Date(its2.long.grass$Date , "%d/%m/%Y") 
+
+```
+
+make some pretty colours
+```{r}
+#GB graphic
+colours <- c("#F0A3FF", "#0075DC", "#993F00","#4C005C","#2BCE48","#FFCC99","#808080","#94FFB5","#8F7C00","#9DCC00","#C20088","#003380","#FFA405","#FFA8BB","#426600","#FF0010","#5EF1F2","#00998F","#740AFF","#990000","#FFFF00");
+N<-length(unique(its2.long.grass$Taxa))
+```
+#get top 10 most abundant grasses
+```{r}
+its2.mean <- aggregate(its2.long.grass$proportion, by=list(Taxa=its2.long.grass$Taxa), FUN=sum)
+its2.mean[order(its2.mean$x),]
+
+abund.grass <- c("Festuca.Lolium", "Holcus", "Alopecurus", "Poa", "Lolium")
+
+its2.long.grass.abund <- subset(its2.long.grass, its2.long.grass$Taxa %in% abund.grass)
+its2.long.grass.abund$Marker <- 'ITS2'
+
+its2.prop.grass <- its2.prop[,which(colnames(its2.prop) %in% its2.long.grass$Taxa)]
+its2.total.poa <- as.data.frame(cbind(rep("Total Poaceae", nrow(its2.prop)), its2.prop[,1:18], rowSums(its2.prop.grass),rep("Poaceae", nrow(its2.prop)), rep("ITS2", nrow(its2.prop))))
+#colnames(its2.total.poa) <- c("Date", "Site", "Total.Poaceae")
+its2.total.poa$Date <- as.Date(its2.total.poa$Date , "%d/%m/%Y") 
+colnames(its2.total.poa) <- colnames(its2.long.grass.abund)
+its2.long.grass.abund <- rbind(its2.long.grass.abund, its2.total.poa)
+```
+plots
+
+```{r}
+
+
+(its2<-ggplot(its2.long.grass.abund,aes(Date,proportion,fill=Taxa, col=Taxa)) +
+  geom_density( stat = "identity", alpha = 0.1)+
+  #geom_line(aes(Date, Total.Poaceae), data=its2.total.poa)+
+  #geom_line(data = df.data, aes(x = Date2, y= counts, col = Site), linetype = "dashed")+
+  xlab("Date")+
+  ylab("Proportion")+
+  #ylim(0,4.5e+06)+
+  facet_wrap(~ Site, ncol=1, scales = "free_y") +
+  theme_bw() +   # remove grey background
+  #theme(legend.position="none")+ # removeing the "#" at the begingin will remove the legend
+  scale_fill_manual(values=colours[1:(N+1)], limits = c("Alopecurus", "Dactylis", "Festuca.Lolium", "Holcus",  "Poa", "Molinia", "Total Poaceae"), labels = c("Alopecurus", "Dactylis", "Festuca.Lolium", "Holcus", "Phleum",  "Poa", "Total Poaceae"))+
+  scale_colour_manual(values=colours[1:(N+1)], limits = c("Alopecurus", "Dactylis", "Festuca.Lolium", "Holcus", "Poa", "Molinia", "Total Poaceae"), labels = c("Alopecurus", "Dactylis", "Festuca.Lolium", "Holcus", "Phleum",  "Poa", "Total Poaceae"))+
+  # scale_x_date(date_labels = "%m/%d/%y")+
+  theme(panel.grid.minor = element_blank())+   # remove minor lines on plot
+  theme(panel.grid.major = element_blank())+   # remove major lines on plot
+  theme(axis.text.x = element_text(colour="grey20",size=12,angle=0,hjust=.5,vjust=.5,face="plain"),  #horizontal axis text, grey, size 16, no angle etc.
+        axis.text.y = element_text(colour="grey20",size=12,angle=0,hjust=1,vjust=0,face="plain"),     #vertical axis text, grey, size 16, no angle etc.
+        axis.title.x = element_text(colour="grey20",size=14,angle=0,hjust=.5,vjust=0,face="plain"),   #horizontal axis label, grey, size 20, no angle etc.
+        axis.title.y = element_text(colour="grey20",size=14,angle=90,hjust=.5,vjust=.5,face="plain")))  #vertical axis label, grey, size 20, no angle etc.
+#its2
+#plot_grid(rbcL, its2)
+
+
+```
+
+If you are intereted in using different colours here are more examples of different palletes
+```{r}
+
+colours <- c("#F0A3FF", "#0075DC", "#993F00","#4C005C","#2BCE48","black","#e67e22","#808080","#94FFB5","#8F7C00","#9DCC00","#C20088","#FFA405","#FFA8BB","#426600","#FF0010","#5EF1F2","#00998F","#740AFF","#990000","#FFFF00");
+
+colours <- c( "#CC79A7", "#E69F00", "#56B4E9", "#009E73", "#4C005C","black", "#0072B2", "#D55E00", "#F0E442")
+brewer.pal(n = 8, name = "Dark2")
+
+my_colours<- c( "dark blue","#56B4E9",  "#E69F00", "#1B9E77", "#E7298A" , "black", "#7570B3", "#D95F02","#A6761D" , "#66A61E", "#E6AB02",  "#666666")
+pie(rep(1,14), col=my_colours)
+
+N<-7
+
+dark6equal = c("#1B9E77", "#66A61E", "#7570B3", "#D95F02", "#E6AB02", "#E7298A")
+rainbow6equal = c("#BF4D4D", "#BFBF4D", "#4DBF4D", "#4DBFBF", "#4D4DBF", "#BF4DBF")
+rich6equal = c("#000043", "#0033FF", "#01CCA4", "#BAFF12", "#FFCC00", "#FF3300")
+set6equal = c("#66C2A5", "#8DA0CB", "#A6D854", "#E78AC3", "#FC8D62", "#FFD92F")
+tim6equal = c("#00008F", "#005AFF", "#23FFDC", "#ECFF13", "#FF4A00", "#800000")
+tol6qualitative=c("#332288", "#88CCEE", "#117733", "#DDCC77", "#CC6677","#AA4499")
+custom = c("#000000", "#66A61E", "#7570B3", "#D95F02", "#E6AB02", "#E7298A")
+custom2 = c("#00008F", "snow4", "cyan", "purple", "green", "#FFCC00", "#FF3300")
+
+# take a look at your colours in a pie chart
+n<-6
+pie(rep(1,n), col=sample(tol6qualitative, n))
+
+```
+plot
+```{r}
+
+(fig <- ggplot(its2.long.grass.abund,aes(Date,proportion,fill=Taxa, col=Taxa, alpha = Taxa), size=1.2) +
+  geom_density( stat = "identity")+ 
+  scale_alpha_manual(values=c(0.2,0.2,0.2,0.2,0.2,0.1), limits = c("Festuca.Lolium", "Holcus", "Alopecurus", "Poa", "Lolium",  "Total Poaceae"), labels = c("Festuca.Lolium", "Holcus", "Alopecurus", "Poa", "Lolium",  "Total Poaceae")) + 
+  #geom_line(data = df.data, aes(x = Date2, y= counts, col = Site), linetype = "dashed")+
+  xlab("Date")+
+  ylab("Proportion")+
+  #ylim(0,4.5e+06)+
+  facet_grid(Site ~Marker, scales = "free_y") +
+  theme_bw() +   # remove grey background
+  #theme(legend.position="none")+
+  #scale_fill_manual(values=scale_fill_brewer(n = 6, palette="Dark2"), limits =c("Festuca.Lolium", "Holcus", "Alopecurus", "Poa", "Lolium",  "Total Poaceae"), labels = c("Festuca.Lolium", "Holcus", "Alopecurus", "Poa", "Lolium",  "Total Poaceae"))+
+  #scale_colour_manual(values=wes_palette(n=6, name="IsleofDogs1"), limits = c("Festuca.Lolium", "Holcus", "Alopecurus", "Poa", "Lolium",  "Total Poaceae"), labels = c("Festuca.Lolium", "Holcus", "Alopecurus", "Poa", "Lolium",  "Total Poaceae"))+
+  scale_fill_manual(values=my_colours[1:(N+1)], limits =c("Festuca.Lolium", "Holcus", "Alopecurus", "Poa", "Lolium",  "Total Poaceae"), labels = c("Festuca.Lolium", "Holcus", "Alopecurus", "Poa", "Lolium",  "Total Poaceae"))+
+  scale_colour_manual(values=my_colours[1:(N+1)], limits = c("Festuca.Lolium", "Holcus", "Alopecurus", "Poa", "Lolium",  "Total Poaceae"), labels = c("Festuca.Lolium", "Holcus", "Alopecurus", "Poa", "Lolium",  "Total Poaceae"))+
+  # scale_x_date(date_labels = "%m/%d/%y")+
+  theme(panel.grid.minor = element_blank())+   # remove minor lines on plot
+  theme(panel.grid.major = element_blank())+   # remove major lines on plot
+  theme(axis.text.x = element_text(colour="grey20",size=11,angle=0,hjust=.5,vjust=.5,face="plain"),  #horizontal axis text, grey, size 16, no angle etc.
+        axis.text.y = element_text(colour="grey20",size=11,angle=0,hjust=1,vjust=0.4,face="plain"),     #vertical axis text, grey, size 16, no angle etc.
+        axis.title.x = element_text(colour="grey20",size=14,angle=0,hjust=.5,vjust=0,face="plain"),   #horizontal axis label, grey, size 20, no angle etc.
+        axis.title.y = element_text(colour="grey20",size=14,angle=90,hjust=.5,vjust=.5,face="plain"),#vertical axis label, grey, size 20, no angle etc.
+        legend.text=element_text(size=12), legend.title=element_text(size=12, face="bold"), 
+        strip.text = element_text(size = 12)) + ylim(0, 1))
+
+# some code to save your figures in a high resolution PNG and PDF
+
+#png("Fig.1.png", width = 10, height = 8, units = 'in', res = 300)
+#plot (both.gg)# Make plot
+#dev.off()
+
+#pdf("Fig.1.pdf", width = 10, height = 8)
+#plot (both.gg)# Make plot
+#dev.off()
+
+        
+```
+
+```{r}
+###PRESENTATION PICS
+(presentations <- ggplot(its2.long.grass.abund,aes(Date,proportion,fill=Taxa, col=Taxa, alpha=Taxa)) +
+  geom_density( stat = "identity", alpha = 0.2)+
+  #geom_line(data = df.data, aes(x = Date2, y= counts, col = Site), linetype = "dashed")+
+  xlab("Date")+
+  ylab("Proportion")+
+  #ylim(0,4.5e+06)+
+  facet_grid(Marker ~Site, scales = "free_y") +
+  theme_bw() +   # remove grey background
+  #theme(legend.position="none")+
+  scale_fill_manual(values=colours[1:(N+1)]) +
+  scale_colour_manual(values=colours[1:(N+1)])+
+  # scale_x_date(date_labels = "%m/%d/%y")+
+  theme(panel.grid.minor = element_blank())+   # remove minor lines on plot
+  #theme(panel.grid.major = element_blank())+   # remove major lines on plot
+  theme(axis.text.x = element_text(colour="grey20",size=13,angle=90,hjust=.5,vjust=.5,face="plain"),  #horizontal axis text, grey, size 16, no angle etc.
+        axis.text.y = element_text(colour="grey20",size=13,angle=0,hjust=1,vjust=0.4,face="plain"),     #vertical axis text, grey, size 16, no angle etc.
+        axis.title.x = element_text(colour="grey20",size=16,angle=0,hjust=.5,vjust=0,face="plain"),   #horizontal axis label, grey, size 20, no angle etc.
+        axis.title.y = element_text(colour="grey20",size=16,angle=90,hjust=.5,vjust=.5,face="plain"),#vertical axis label, grey, size 20, no angle etc.
+        legend.text=element_text(size=16), legend.title=element_text(size=14, face="bold"), 
+        strip.text = element_text(size = 12), legend.position="bottom") + 
+  ylim(0, 1))
+
+```
+create a table and look at the realtive proportions of your species 
+```{r}
+its2.max <- aggregate(proportion~Taxa, its2.long.grass, FUN=max)
+its2.max[order(its2.max$proportion),]
+```
+
+make different categories of abundance 
+
+```{r}
+med.grass <- c("Anthoxanthum", "Hordeum", "Dactylis", "Avena", "Festuca")
+lo.grass <- c("Deschampsia", "Cynosurus", "Secale", "Arrhenatherum", "Phalaris", "Briza", "Triticum", "Phleum", "Molinia", "Zea")
+
+med.low.grass<- c("Anthoxanthum", "Hordeum", "Dactylis", "Avena", "Festuca","Deschampsia", "Cynosurus", "Secale", "Arrhenatherum", "Phalaris", "Briza", "Triticum", "Phleum", "Molinia", "Zea")
+
+```
+creat different data.frame with your new categories of grass abundance
+```{r}
+its2.long.grass.med <- subset(its2.long.grass, its2.long.grass$Taxa %in% med.grass)
+its2.long.grass.med$Marker <- 'ITS2'
+
+its2.long.grass.med.low <- subset(its2.long.grass, its2.long.grass$Taxa %in% med.low.grass)
+its2.long.grass.med.low$Marker <- 'ITS2'
+```
+plot
+```{r}
+ggplot(its2.long.grass.med,aes(Date,proportion,fill=Taxa, col=Taxa)) +
+  geom_density( stat = "identity", alpha = 0.2)+
+  #geom_line(data = df.data, aes(x = Date2, y= counts, col = Site), linetype = "dashed")+
+  xlab("Date")+
+  ylab("Proportion")+
+  facet_wrap(Site ~ ., scales = "free_y", ncol=2) +
+  #ylim(0,4.5e+06)+
+  theme_bw() +   # remove grey background
+  #theme(legend.position="none")+
+  scale_fill_manual(values=colours[1:(N+1)], limits = c("Anthoxanthum", "Hordeum", "Dactylis",  "Avena", "Festuca"), labels = c("Anthoxanthum", "Hordeum", "Dactylis",  "Avena", "Festuca"))+
+  scale_colour_manual(values=colours[1:(N+1)], limits = c("Anthoxanthum", "Hordeum", "Dactylis", "Avena", "Festuca"), labels = c("Anthoxanthum", "Hordeum", "Dactylis", "Avena", "Festuca"))+
+  # scale_x_date(date_labels = "%m/%d/%y")+
+  theme(panel.grid.minor = element_blank())+   # remove minor lines on plot
+  theme(panel.grid.major = element_blank())+   # remove major lines on plot
+  theme(axis.text.x = element_text(colour="grey20",size=13,angle=0,hjust=.5,vjust=.5,face="plain"),  #horizontal axis text, grey, size 16, no angle etc.
+        axis.text.y = element_text(colour="grey20",size=13,angle=0,hjust=1,vjust=0.4,face="plain"),     #vertical axis text, grey, size 16, no angle etc.
+        axis.title.x = element_text(colour="grey20",size=16,angle=0,hjust=.5,vjust=0,face="plain"),   #horizontal axis label, grey, size 20, no angle etc.
+        axis.title.y = element_text(colour="grey20",size=16,angle=90,hjust=.5,vjust=.5,face="plain"),#vertical axis label, grey, size 20, no angle etc.
+        legend.text=element_text(size=16), legend.title=element_text(size=14, face="bold"), 
+        strip.text = element_text(size = 12), legend.position="right") #+ ylim(0, 0.25)
+```
+Even more colours
+```{r}
+#variable y axis low.med
+N<-15
+c25 <- c("dodgerblue2","#E31A1C", # red
+         "green4",
+         "#6A3D9A", # purple
+         "#FF7F00", # orange
+         "black","brown","gold1",
+         "maroon","deeppink1","blue1","steelblue4",
+         "darkturquoise","green1","yellow4","yellow3",
+         "darkorange4", "orchid1","skyblue2","#FB9A99", # lt pink
+         "palegreen2",
+         "#CAB2D6", # lt purple
+         "#FDBF6F", # lt orange
+         "gray70", "khaki2")
+pie(rep(1,25), col=c25)
+```
+
+```{r}
+(Fig2<-ggplot(its2.long.grass.med.low,aes(Date,proportion,fill=Taxa, col=Taxa)) +
+  geom_density( stat = "identity", alpha = 0.2)+
+  #geom_line(data = df.data, aes(x = Date2, y= counts, col = Site), linetype = "dashed")+
+  xlab("Date")+
+  ylab("Proportion")+
+  #ylim(0,4.5e+06)+
+  facet_wrap(Site ~ ., scales = "free_y", ncol=2) +
+  theme_bw() +   # remove grey background
+  #theme(legend.position="none")+
+  scale_fill_manual(values=c25[1:(N+1)])+ 
+  scale_colour_manual(values=c25[1:(N+1)])+
+  # scale_x_date(date_labels = "%m/%d/%y")+
+  theme(panel.grid.minor = element_blank())+   # remove minor lines on plot
+  theme(panel.grid.major = element_blank())+   # remove major lines on plot
+  theme(axis.text.x = element_text(colour="grey20",size=13,angle=0,hjust=.5,vjust=.5,face="plain"),  #horizontal axis text, grey, size 16, no angle etc.
+        axis.text.y = element_text(colour="grey20",size=13,angle=0,hjust=1,vjust=0.4,face="plain"),     #vertical axis text, grey, size 16, no angle etc.
+        axis.title.x = element_text(colour="grey20",size=16,angle=0,hjust=.5,vjust=0,face="plain"),   #horizontal axis label, grey, size 20, no angle etc.
+        axis.title.y = element_text(colour="grey20",size=16,angle=90,hjust=.5,vjust=.5,face="plain"),#vertical axis label, grey, size 20, no angle etc.
+        legend.text=element_text(size=16), legend.title=element_text(size=14, face="bold"), 
+        strip.text = element_text(size = 12), legend.position="right")) #+ ylim(0, 0.25)
+
+
+```
+
+```{r}
+#rare
+its2.long.grass.rare <- subset(its2.long.grass, its2.long.grass$Taxa %in% lo.grass)
+its2.long.grass.rare$Marker <- 'ITS2'
+
+tim12equal = c("#00008F", "#0000EA", "#0047FF", "#00A2FF", "#00FEFF", "#5AFFA5", "#B5FF4A", "#FFED00", "#FF9200", "#FF3700", "#DB0000", "#800000")
+```
+
+```{r}
+ggplot(its2.long.grass.rare,aes(Date,proportion,fill=Taxa, col=Taxa)) +
+  geom_density( stat = "identity", alpha = 0.2)+
+  #geom_line(data = df.data, aes(x = Date2, y= counts, col = Site), linetype = "dashed")+
+  xlab("Date")+
+  ylab("Proportion")+
+  #ylim(0,4.5e+06)+
+  facet_wrap(~Site, ncol=2 , scales = "free_y") +
+  theme_bw() +   # remove grey background
+  #theme(legend.position="none")+ # removeing the "#" at the begingin will remove the legend
+  scale_fill_manual(values=tim12equal)+
+  scale_colour_manual(values=tim12equal)+
+  # scale_x_date(date_labels = "%m/%d/%y")+
+  theme(panel.grid.minor = element_blank())+   # remove minor lines on plot
+  theme(panel.grid.major = element_blank())+   # remove major lines on plot
+  theme(axis.text.x = element_text(colour="grey20",size=13,angle=0,hjust=.5,vjust=.5,face="plain"),  #horizontal axis text, grey, size 16, no angle etc.
+        axis.text.y = element_text(colour="grey20",size=13,angle=0,hjust=1,vjust=0.4,face="plain"),     #vertical axis text, grey, size 16, no angle etc.
+        axis.title.x = element_text(colour="grey20",size=16,angle=0,hjust=.5,vjust=0,face="plain"),   #horizontal axis label, grey, size 20, no angle etc.
+        axis.title.y = element_text(colour="grey20",size=16,angle=90,hjust=.5,vjust=.5,face="plain"),#vertical axis label, grey, size 20, no angle etc.
+        legend.text=element_text(size=16), legend.title=element_text(size=14, face="bold"), 
+        strip.text = element_text(size = 12), legend.position="right")# + ylim(0, 0.1)
+```
+
+
+```{r}
+##split the markers for rare stuff
+lo.grass.its2 <- c("Deschampsia", "Cynosurus", "Secale", "Arrhenatherum")
+
+
+its2.long.grass.rare <- subset(its2.long.grass, its2.long.grass$Taxa %in% lo.grass.its2)
+
+rich6equal = c("#000043", "#0033FF", "#01CCA4", "#BAFF12", "#FFCC00", "#FF3300")
+
+```
+
+```{r}
+
+ggplot(its2.long.grass.rare,aes(Date,proportion,fill=Taxa, col=Taxa)) +
+  geom_density( stat = "identity", alpha = 0.3)+
+  #geom_line(data = df.data, aes(x = Date2, y= counts, col = Site), linetype = "dashed")+
+  xlab("Date")+
+  ylab("Proportion")+
+  #ylim(0,4.5e+06)+
+  facet_grid(. ~Site, scales = "free_y") +
+  theme_bw() +   # remove grey background
+  #theme(legend.position="none")+
+  scale_fill_manual(values=rich6equal)+
+  scale_colour_manual(values=rich6equal)+
+  # scale_x_date(date_labels = "%m/%d/%y")+
+  theme(panel.grid.minor = element_blank())+   # remove minor lines on plot
+  #theme(panel.grid.major = element_blank())+   # remove major lines on plot
+  theme(axis.text.x = element_text(colour="grey20",size=13,angle=0,hjust=.5,vjust=.5,face="plain"),  #horizontal axis text, grey, size 16, no angle etc.
+        axis.text.y = element_text(colour="grey20",size=13,angle=0,hjust=1,vjust=0.4,face="plain"),     #vertical axis text, grey, size 16, no angle etc.
+        axis.title.x = element_text(colour="grey20",size=16,angle=0,hjust=.5,vjust=0,face="plain"),   #horizontal axis label, grey, size 20, no angle etc.
+        axis.title.y = element_text(colour="grey20",size=16,angle=90,hjust=.5,vjust=.5,face="plain"),#vertical axis label, grey, size 20, no angle etc.
+        legend.text=element_text(size=16), legend.title=element_text(size=14, face="bold"), 
+        strip.text = element_text(size = 12), legend.position="bottom") + ylim(0, 0.1)
+
+
+```
+
