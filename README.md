@@ -3,7 +3,8 @@ Metabarcoding workflow for visualisation and statistics
 
 RStudio: [![Binder](http://mybinder.org/badge_logo.svg)](http://mybinder.org/v2/gh/G-Brennan/Metabarcoding_group_UCDavis/master?urlpath=rstudio)
 
-Binder: [![Binder](http://mybinder.org/badge_logo.svg)](http://mybinder.org/v2/gh/G-Brennan/Metabarcoding_group_UCDavis/master)
+Binder: [![Binder](http://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/G-Brennan/Metabarcoding_Oct2019.git/master)
+
 
 Quick Start
 
