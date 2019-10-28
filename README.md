@@ -23,7 +23,6 @@ The code uses three .csv files:
 2) Metadata
 3) Taxa list
 
-How should we use/interpret this visualization?
 Authors: Georgina L. Brennan 
 github ID: G-Brennan
 ORCID: ORCID: 0000-0003-2045-757X
