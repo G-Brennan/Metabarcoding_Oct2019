@@ -23,8 +23,8 @@ library(ggplot2)
 library(reshape2)
 library(tidyr)
 library(RColorBrewer)
-library(cowplot)
-library(grid)
+#library(cowplot)
+#library(grid)
 
 ```
 
@@ -77,7 +77,7 @@ its2.long.grass.abund <- subset(its2.long.grass, its2.long.grass$Taxa %in% abund
 its2.long.grass.abund$Marker <- 'ITS2'
 
 its2.prop.grass <- its2.prop[,which(colnames(its2.prop) %in% its2.long.grass$Taxa)]
-its2.total.poa <- as.data.frame(cbind(rep("Total Poaceae", nrow(its2.prop)), its2.prop[,1:18], rowSums(its2.prop.grass),rep("Poaceae", nrow(its2.prop)), rep("ITS2", nrow(its2.prop))))
+its2.total.poa <- as.data.frame(cbind(rep("Total Poaceae", nrow(its2.prop)), its2.prop[,1:19], rowSums(its2.prop.grass),rep("Poaceae", nrow(its2.prop)), rep("ITS2", nrow(its2.prop))))
 #colnames(its2.total.poa) <- c("Date", "Site", "Total.Poaceae")
 its2.total.poa$Date <- as.Date(its2.total.poa$Date , "%d/%m/%Y") 
 colnames(its2.total.poa) <- colnames(its2.long.grass.abund)
