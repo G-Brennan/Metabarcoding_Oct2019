@@ -1,0 +1,281 @@
+---
+title: "Analysis_Grass_metabarcoding_time_series"
+author: "Georgina"
+date: "10/25/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r packages}
+
+library(lme4)
+library(lmerTest)
+library(ggplot2)
+library(plyr)
+library(plotrix)
+library(mvabund)
+library(reshape2)
+library(Matrix)
+library(vegan)
+library(knitr)
+library(lmtest)
+library(tidyr)
+
+```
+
+
+##read in metatable, abundance table and taxa list
+
+```{r echo = TRUE}
+
+meta<-read.csv("metadata.csv",row.names=1,check.names=FALSE) #
+meta$ID<-as.factor(rownames(meta))
+str(meta)
+
+#abund<-read.csv("abundance_data_for_stats_grass_only_ITS2_140818.csv")
+its2.db<-read.csv("its2-otu-table-NdV.csv", row.names=1,check.names=FALSE)
+#change value to integer so that a negative binomial distribution can be used
+
+its2.tax <- read.csv("its2-family.csv")
+
+```
+Make data ready for stats and plotting
+```{r}
+# work out the relative abundance
+its2.prop <- as.data.frame(prop.table(data.matrix(its2.db), margin=1))
+
+# scale data by 1000 then turn into integer for statistical analysis 
+its2.prop.scale<-its2.prop
+its2.prop.scale<-(its2.prop.scale[,] * 1000)
+
+# turn data to integer for model 
+its2.prop.scale[,]<-as.integer(unlist(its2.prop.scale[,]))
+
+# add metadata for plotting relative abundance
+its2.prop$Sample <- row.names(its2.prop)
+its2.prop <- merge(meta, its2.prop, by.x = 'ID', by.y = 'Sample', all=FALSE)
+its2.prop <- subset(its2.prop, !is.na(its2.prop$Week))
+
+
+
+```
+Make data into long format for ecological statistical analysis and plotting in ggplot2
+```{r}
+names(its2.prop) 
+its2.long <- gather(its2.prop, Taxa, proportion, 20:86, factor_key=TRUE)
+
+# add taxa list
+its2.long <- merge(its2.long, its2.tax, by='Taxa')
+
+# filter out the grasses
+its2.long.grass <- subset(its2.long, its2.long$Family == 'Poaceae')
+
+#format the dates
+its2.long.grass$Date <- as.Date(its2.long.grass$Date , "%d/%m/%Y") 
+
+```
+summary stats example
+```{r}
+# take the average of the abunnce of each grass genus sampled of the summer, at each sample site
+summary<-ddply(its2.long.grass,  .(Taxa,	Site), summarize,
+               average.proportion = mean(proportion, na.rm=TRUE), sd.proportion = (sd(proportion, na.rm=TRUE)),var.proportion = (var(proportion)))
+```
+
+plotting the data
+```{r}
+
+# simple plot with date on the x axis
+plot(its2.long.grass$proportion ~ its2.long.grass$Date, col = its2.long.grass$Taxa)
+
+
+```
+
+Another visusalisation 
+```{r, echo = TRUE}
+
+ggplot(data = its2.long.grass, aes(x= Site, y = proportion, col = Taxa))+ 
+  geom_jitter(alpha = 0.3)+ # jitter spreads the points around, useful for categorical x axis
+  xlab("Site")+
+  ylab("Proportion")+
+  theme_bw() +   # remove grey background
+   theme(panel.grid.minor = element_blank())+   # remove minor lines on plot
+  theme(panel.grid.major = element_blank())+   # remove major lines on plot
+  theme(axis.text.x = element_text(colour="grey20",size=12,angle=90,hjust=.5,vjust=.5,face="plain"),  #horizontal axis text, grey, size 16, no angle etc.
+        axis.text.y = element_text(colour="grey20",size=12,angle=0,hjust=1,vjust=0,face="plain"),     #vertical axis text, grey, size 16, no angle etc.
+        axis.title.x = element_text(colour="grey20",size=14,angle=0,hjust=.5,vjust=0,face="plain"),   #horizontal axis label, grey, size 20, no angle etc.
+        axis.title.y = element_text(colour="grey20",size=14,angle=90,hjust=.5,vjust=.5,face="plain"))  #vertical axis label, grey, size 20, no angle etc.
+
+
+```
+summary stats example
+```{r}
+
+ggplot(data = summary, aes(x= Site, y = average.proportion, col = Taxa, group = Taxa))+ 
+geom_point(shape = 21, size = 2, position = position_dodge(width = 0.5))+
+geom_errorbar(data = summary, aes(x = Site, y = average.proportion, ymin = average.proportion - var.proportion, ymax = average.proportion + var.proportion, width = 0.7, group = Taxa),col = "black", position = position_dodge(width = 0.5)) +
+  xlab("Site")+
+  ylab("Proportion")+
+  theme_bw() +   # remove grey background
+   theme(panel.grid.minor = element_blank())+   # remove minor lines on plot
+  theme(panel.grid.major = element_blank())+   # remove major lines on plot
+  theme(axis.text.x = element_text(colour="grey20",size=12,angle=90,hjust=.5,vjust=.5,face="plain"),  #horizontal axis text, grey, size 16, no angle etc.
+        axis.text.y = element_text(colour="grey20",size=12,angle=0,hjust=1,vjust=0,face="plain"),     #vertical axis text, grey, size 16, no angle etc.
+        axis.title.x = element_text(colour="grey20",size=14,angle=0,hjust=.5,vjust=0,face="plain"),   #horizontal axis label, grey, size 20, no angle etc.
+        axis.title.y = element_text(colour="grey20",size=14,angle=90,hjust=.5,vjust=.5,face="plain"))  #vertical axis label, grey, size 20, no angle etc.
+
+
+```
+Assess the distrubition of the data. If your analysis is not taking that into account it’s going to have some poor properties. 
+For presence absence data you can use binomial distrubtion 
+```{r}
+#How mnay NA's are there?
+sum(is.na(its2.long.grass$proportion)) #there should be no NA's
+
+its2.prop.scale$Sample <- as.factor(row.names(its2.prop.scale))
+
+names(its2.prop.scale)
+
+its2.long.scale <- gather(its2.prop.scale, Taxa, Quantity.int, 1:67 , factor_key=TRUE)
+
+# first convert the data to integers - this means we should multiply by a number so that numbers less than 1 are not changed to 0.
+its2.long.grass$Quantity.int<-abs(as.integer(its2.long.grass$proportion*1000))
+
+# are the data normally distributed - qq plot
+qqnorm(its2.long.grass$proportion, main="NormalQ-Q Plot",ylab="Taxa")
+#qqline(grass2$Value)
+
+#shapiro test for normality
+shapiro.test(its2.long.grass$proportion)
+
+# histogram plot
+hist(its2.long.grass$proportion) 
+
+
+
+
+```
+
+```{r}
+# is the data log normally distributed?
+hist(log(its2.long.grass$proportion))
+
+```
+
+```{r}
+library(vcd)## loading vcd package
+require(car)
+require(MASS)
+library(fitdistrplus)
+
+
+
+gf<-goodfit(its2.long.grass$Quantity.int,type= "poisson",method= "MinChisq")
+summary(gf)
+plot(gf,main="Count data vs Poisson distribution")
+
+
+```
+
+The data fits a negative binmial distribution. We expect the majority of data points to be within the blue lines of the qqplot
+
+```{r, echo = TRUE}
+nbinom <- fitdist(its2.long.grass$Quantity.int, "nbinom")
+
+qqp(its2.long.grass$Quantity.int, "nbinom", size = nbinom$estimate[[1]], mu = nbinom$estimate[[2]])
+
+
+```
+
+DATE does not make sense as it will be converted to a number for the purpose the model. For this reason, we using Timepoint where all dates are coverted to a number, 1 marks the first sampling date!
+
+```{r, echo = FALSE}
+# Check to ensure that the samples in meta_table are in the same order as in abund_table
+rownames(meta)<-meta$ID
+meta2<-meta[rownames(its2.db),]
+
+
+```
+
+```{r}
+# make an mvabund object
+
+str(its2.long.grass)
+grass_genus <- mvabund(its2.db)
+str(grass_genus)
+#plot(grass_genus ~ Site, data = meta)
+#meanvar.plot(grass_genus~ meta$Site)
+```
+
+
+this is the model 
+```{r}
+ft1 = manyglm(grass_genus ~ Day_since_start + Month + Latitude + Latitude:Day_since_start, family = "negative binomial",  data=meta2)
+
+#ANOVA - this takes a longtime to run! remove the hashtag to run 
+#anova(ft1, resamp = "montecarlo", test = "LR")
+
+# univariate - this takes a longtime to run! remove the hashtag to run 
+#anova(ft1, p.uni="adjusted")
+
+# summary - this takes a longtime to run! remove the hashtag to run 
+#summary(ft1)
+
+#AIC and BIC
+(ft1)$AICsum
+sum(BIC(ft1))
+
+```
+check if model is overparameterised
+```{r}
+drop1(ft1, test = "Chisq")
+#drop1(update(ft12, ~ . -Day_since_start:Latitude), test = "Chisq")
+```
+
+```{r}
+ft2 = manyglm(grass_genus ~ Day_since_start , family = "negative binomial",  data=meta2)
+
+#ANOVA - this takes a longtime to run! remove the hashtag to run 
+#anova(ft2, resamp = "montecarlo", test = "LR")
+
+# univariate - this takes a longtime to run! remove the hashtag to run 
+#anova(ft2, p.uni="adjusted")
+
+# summary - this takes a longtime to run! remove the hashtag to run 
+#summary(ft2)
+
+#AIC and BIC
+(ft2)$AICsum
+sum(BIC(ft2))
+
+```
+```
+Overfitting of the models can be quickly tested comparing the lowest Akaike Information Criterion (AIC) score and Bayesian information criterion (BIC) (there is a function in R that can do this relatively quickly called ‘dropterm’). In addition, the appropriateness of the models can be checked by visual inspection of the residuals against predicted values from the models. This type of evidence will support that the models selected in this investigation are plausible.
+
+
+
+```{r}
+# the drop1 function will show which variable are significant and which are not. drop one level at a time 
+# it does not recomend dropping any explanaotory variables
+
+#drop1(ft12, test = "Chisq")
+#drop1(update(ft12, ~ . -Day_since_start:Latitude), test = "Chisq")
+#drop1(update(ft12, ~ .  -Latitude:Timepoint +  -Timepoint:Taxa), test = "Chisq")
+
+# one can select the best model accoring to AIC and BIC comparison 
+# Bayesian information criterion (BIC) penalizes complexity, more than AIC, and will typically select a smaller model
+
+```
+
+```{r, echo = TRUE}
+plot(ft1)
+plot(ft1, which = 2)
+```
+
+```{r, echo = TRUE}
+plot(ft2)
+plot(ft2, which = 2)
+
+```
